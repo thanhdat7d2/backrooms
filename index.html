@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BACKROOM</title>
+  <meta name="description"
+    content="An immersive, atmospheric 3D maze game built with Three.js. Generate random square mazes, navigate corridors, and find the escape portal.">
+  <link rel="stylesheet" href="index.css">
+  <link rel="icon" href="data:,">
+
+  <!-- Import maps polyfill if needed, and three.js module mappings -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./lib/three.module.js",
+        "three/addons/": "./lib/"
+      }
+    }
+  </script>
+</head>
+
+<body>
+
+  <!-- WebGL Canvas Container -->
+  <div id="canvas-container"></div>
+
+  <!-- HUD Overlay (HUD elements are always active) -->
+  <div id="hud">
+    <!-- Level Display & Health Bar (Top Left) -->
+    <div class="hud-panel hud-top-left" id="hud-level-panel" style="display: flex; gap: 1.5rem; align-items: center;">
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <span class="label">LEVEL</span>
+        <span class="value" id="hud-level-value">1</span>
+      </div>
+      <div style="width: 1px; height: 20px; background: rgba(255,255,255,0.15);"></div>
+      <div style="display: flex; align-items: center; gap: 0.8rem;">
+        <span class="label">HP</span>
+        <div id="health-bar-container"
+          style="width: 100px; height: 12px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; overflow: hidden; display: flex;">
+          <div id="health-bar-fill"
+            style="width: 100%; height: 100%; background: #ff3366; transition: width 0.2s ease;"></div>
+        </div>
+      </div>
+    </div>
+
+
+
+  </div>
+
+  <!-- Distance PING Indicator (Tab Overlay) -->
+  <div id="distance-ping">
+    <div class="ping-card">
+      <div class="sonar-wave"></div>
+      <div class="ping-title">Distance To Exit</div>
+      <div class="ping-distance" id="ping-distance-value">---</div>
+      <div class="ping-unit">Meters</div>
+    </div>
+  </div>
+
+  <!-- Screen 1: Start Screen -->
+  <div class="overlay-screen" id="start-screen">
+    <div class="glass-panel">
+      <h1>BACKROOM</h1>
+      <div class="skin-selector-container">
+        <h3>CHOOSE SKIN</h3>
+        <div class="skin-cards-grid">
+          <div class="skin-card active" data-skin="backroom">
+            <div class="skin-card-title">Backrooms</div>
+            <div class="skin-card-previews">
+              <div class="preview-tile ceiling" style="background-image: url('img/skin/backroom/ceiling_tile.png');"
+                title="Ceiling"></div>
+              <div class="preview-tile wall" style="background-image: url('img/skin/backroom/wall_tile.png');"
+                title="Wall"></div>
+              <div class="preview-tile floor" style="background-image: url('img/skin/backroom/floor_tile.png');"
+                title="Floor"></div>
+            </div>
+          </div>
+          <div class="skin-card" data-skin="bathroom">
+            <div class="skin-card-title">Bathroom</div>
+            <div class="skin-card-previews">
+              <div class="preview-tile ceiling" style="background-image: url('img/skin/bathroom/ceiling_tile.png');"
+                title="Ceiling"></div>
+              <div class="preview-tile wall" style="background-image: url('img/skin/bathroom/wall_tile.png');"
+                title="Wall"></div>
+              <div class="preview-tile floor" style="background-image: url('img/skin/bathroom/floor_tile.png');"
+                title="Floor"></div>
+            </div>
+          </div>
+          <div class="skin-card" data-skin="dungeon">
+            <div class="skin-card-title">Dungeon</div>
+            <div class="skin-card-previews">
+              <div class="preview-tile ceiling" style="background-image: url('img/skin/dungeon/ceiling_tile.png');"
+                title="Ceiling"></div>
+              <div class="preview-tile wall" style="background-image: url('img/skin/dungeon/wall_tile.png');"
+                title="Wall"></div>
+              <div class="preview-tile floor" style="background-image: url('img/skin/dungeon/floor_tile.png');"
+                title="Floor"></div>
+            </div>
+          </div>
+          <div class="skin-card" data-skin="vietnam school">
+            <div class="skin-card-title">School</div>
+            <div class="skin-card-previews">
+              <div class="preview-tile ceiling"
+                style="background-image: url('img/skin/vietnam school/ceiling_tile.png');" title="Ceiling"></div>
+              <div class="preview-tile wall" style="background-image: url('img/skin/vietnam school/wall_tile.png');"
+                title="Wall"></div>
+              <div class="preview-tile floor" style="background-image: url('img/skin/vietnam school/floor_tile.png');"
+                title="Floor"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls-guide">
+        <div class="control-item">
+          <span class="key-cap">W</span>
+          <span class="key-cap">A</span>
+          <span class="key-cap">S</span>
+          <span class="key-cap">D</span>
+          <span class="control-desc">Điều khiển</span>
+        </div>
+        <div class="control-item">
+          <span class="key-cap">Mouse</span>
+          <span class="control-desc">Nhìn xung quanh</span>
+        </div>
+        <div class="control-item">
+          <span class="key-cap wide">Shift</span>
+          <span class="control-desc">Tăng tốc</span>
+        </div>
+        <div class="control-item">
+          <span class="key-cap wide">Space</span>
+          <span class="control-desc">Nhảy</span>
+        </div>
+        <div class="control-item">
+          <span class="key-cap wide">Tab</span>
+          <span class="control-desc">Xem khoảng cách tới lối ra</span>
+        </div>
+        <div class="control-item">
+          <span class="key-cap wide">Ctrl</span>
+          <span class="control-desc">Chỉ dẫn tới lối ra (tắt/bật)</span>
+        </div>
+      </div>
+
+      <button class="btn-primary" id="start-game-btn">PLAY</button>
+    </div>
+  </div>
+
+  <!-- Screen 2: Pause Screen -->
+  <div class="overlay-screen hidden" id="pause-screen">
+    <div class="glass-panel" style="max-height: 90vh; overflow-y: auto;">
+      <h1>TẠM DỪNG</h1>
+
+      <!-- Skin Selector (Pause Screen Grid) -->
+      <div class="skin-selector-container" style="margin-top: 1rem; margin-bottom: 1rem;">
+        <h3>CHOOSE SKIN</h3>
+        <div class="skin-cards-grid">
+          <div class="skin-card active" data-skin="backroom">
+            <div class="skin-card-title">Backrooms</div>
+            <div class="skin-card-previews">
+              <div class="preview-tile ceiling" style="background-image: url('img/skin/backroom/ceiling_tile.png');"
+                title="Ceiling"></div>
+              <div class="preview-tile wall" style="background-image: url('img/skin/backroom/wall_tile.png');"
+                title="Wall"></div>
+              <div class="preview-tile floor" style="background-image: url('img/skin/backroom/floor_tile.png');"
+                title="Floor"></div>
+            </div>
+          </div>
+          <div class="skin-card" data-skin="bathroom">
+            <div class="skin-card-title">Bathroom</div>
+            <div class="skin-card-previews">
+              <div class="preview-tile ceiling" style="background-image: url('img/skin/bathroom/ceiling_tile.png');"
+                title="Ceiling"></div>
+              <div class="preview-tile wall" style="background-image: url('img/skin/bathroom/wall_tile.png');"
+                title="Wall"></div>
+              <div class="preview-tile floor" style="background-image: url('img/skin/bathroom/floor_tile.png');"
+                title="Floor"></div>
+            </div>
+          </div>
+          <div class="skin-card" data-skin="dungeon">
+            <div class="skin-card-title">Dungeon</div>
+            <div class="skin-card-previews">
+              <div class="preview-tile ceiling" style="background-image: url('img/skin/dungeon/ceiling_tile.png');"
+                title="Ceiling"></div>
+              <div class="preview-tile wall" style="background-image: url('img/skin/dungeon/wall_tile.png');"
+                title="Wall"></div>
+              <div class="preview-tile floor" style="background-image: url('img/skin/dungeon/floor_tile.png');"
+                title="Floor"></div>
+            </div>
+          </div>
+          <div class="skin-card" data-skin="vietnam school">
+            <div class="skin-card-title">School</div>
+            <div class="skin-card-previews">
+              <div class="preview-tile ceiling"
+                style="background-image: url('img/skin/vietnam school/ceiling_tile.png');" title="Ceiling"></div>
+              <div class="preview-tile wall" style="background-image: url('img/skin/vietnam school/wall_tile.png');"
+                title="Wall"></div>
+              <div class="preview-tile floor" style="background-image: url('img/skin/vietnam school/floor_tile.png');"
+                title="Floor"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 1.5rem; justify-content: center; margin-top: 1rem; width: 100%;">
+        <button class="btn-primary" id="resume-game-btn">Tiếp Tục</button>
+        <button class="btn-primary" id="pause-restart-game-btn"
+          style="background: #ff3366; box-shadow: 0 0 15px rgba(255, 51, 102, 0.6);">Chơi Lại</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Screen 3: Level Completed Screen -->
+  <div class="overlay-screen hidden" id="level-complete-screen">
+    <div class="glass-panel">
+      <h1>THOÁT RỒI!</h1>
+      <h2 id="cleared-level-title">MAZE 1 SUCCESS</h2>
+      <p class="tagline">Bạn đã tìm thấy lối ra. Tầng tiếp theo sâu hơn và rộng hơn đang chờ...</p>
+
+      <button class="btn-primary" id="next-level-btn">XUỐNG TẦNG TIẾP THEO</button>
+    </div>
+  </div>
+
+  <!-- Load Modules -->
+  <script type="module" src="game.js"></script>
+</body>
+
+</html>
