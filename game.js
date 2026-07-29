@@ -10,6 +10,7 @@ import { updateNavigationLine } from './navigation.js';
 import { setupControls, updateDistanceHUD } from './controls.js';
 import { buildMaze } from './builder.js';
 import { updateDoors } from './door.js';
+import { preloadFurnitureModels } from './furniture.js';
 
 // --- THREE.JS SETUP ---
 function initEngine() {
@@ -165,7 +166,8 @@ window.onload = () => {
     ...basePromises,
     Promise.all(wallPicPromises),
     Promise.all(chasePicPromises),
-    Promise.all(scaryAudioPromises)
+    Promise.all(scaryAudioPromises),
+    preloadFurnitureModels().catch(err => console.warn("Furniture preload failed:", err))
   ]).then(([wallTex, ceilingTex, floorTex, doorTex, doorSidesTex, wallPics, chasePics, scaryAudios]) => {
     state.wallTexture = wallTex;
     state.ceilingTexture = ceilingTex;

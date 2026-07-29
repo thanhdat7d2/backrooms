@@ -267,7 +267,8 @@ export class MazeGenerator {
     // ----------------------------------------------------------
     const noHolesWalls = new Set();
 
-    roomCoordsList.forEach(({ startI, startJ, rw, rh }) => {
+    roomCoordsList.forEach((room) => {
+      const { startI, startJ, rw, rh } = room;
       const boundaries = [];
 
       // Top boundary
@@ -318,6 +319,13 @@ export class MazeGenerator {
           noHolesWalls.add(`${b.type},${b.i},${b.j}`);
         }
       });
+
+      // Save world bounds and exits on the room for furniture placement
+      room.xMin = colX[startI];
+      room.xMax = colX[startI + rw];
+      room.zMin = rowZ[startJ];
+      room.zMax = rowZ[startJ + rh];
+      room.exits = exits;
     });
 
     // ----------------------------------------------------------
@@ -692,6 +700,7 @@ export class MazeGenerator {
       worldToCell,
       walls: wallSegments,
       pillars,
+      rooms: roomCoordsList,
       lights: lightTiles,
       hWalls,
       vWalls,

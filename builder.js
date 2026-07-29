@@ -4,6 +4,7 @@ import { MazeGenerator } from './maze.js';
 import { updateDynamicLights } from './lights.js';
 import { updateHealthHUD } from './physics.js';
 import { createEPromptSprite, updateDoorCollider } from './door.js';
+import { furnishRooms } from './furniture.js';
 
 // --- GEOMETRY UV ADJUSTMENT FOR WALLS/PILLARS ---
 export function adjustBoxUVs(geometry, sizeX, sizeY, sizeZ, isHoriz, uOffset = 0, yOffset = 0) {
@@ -91,20 +92,24 @@ export function buildMaze(level) {
         return;
       }
 
-      if (obj.geometry) {
-        obj.geometry.dispose();
-      }
+      if (!obj.userData.isSharedModelAsset) {
+        if (obj.geometry) {
+          obj.geometry.dispose();
+        }
 
-      if (obj.material) {
-        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-        mats.forEach(mat => {
-          if (mat !== state.wallMaterialGlobal) {
-            if (mat.map && mat.map !== state.wallTexture && mat.map !== state.doorTexture && mat.map !== state.doorSidesTexture) {
-              mat.map.dispose();
+        if (obj.material) {
+          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+          mats.forEach(mat => {
+            if (mat !== state.wallMaterialGlobal) {
+              if (mat.map && mat.map !== state.wallTexture && mat.map !== state.doorTexture && mat.map !== state.doorSidesTexture) {
+                mat.map.dispose();
+              }
+              if (mat.normalMap) mat.normalMap.dispose();
+              if (mat.roughnessMap) mat.roughnessMap.dispose();
+              mat.dispose();
             }
-            mat.dispose();
-          }
-        });
+          });
+        }
       }
 
       if (obj.parent === state.scene) {
@@ -772,6 +777,9 @@ export function buildMaze(level) {
       }
     }
   }
+
+  // 6. Furnish rooms with carpets, windows, lamps, tables, chairs, sofas, shelves, TVs
+  furnishRooms();
 
   // Force first-frame light check
   updateDynamicLights(true);

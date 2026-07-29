@@ -88,6 +88,9 @@ export const state = {
   doorSidesTexture: null,
   doors: [],
 
+  furnitureModels: {},
+  carpetTextures: null,
+
   wallPicTextures: [],
   chasePicTextures: [],
   preloadedScaryAudios: {},
