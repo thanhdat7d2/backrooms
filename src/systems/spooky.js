@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { state, CONFIG } from './state.js';
+import { state, CONFIG } from '../state.js';
 import { playMonsterHitSound, playSpookySound } from './audio.js';
 import { updateHealthHUD } from './physics.js';
 

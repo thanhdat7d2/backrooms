@@ -2,7 +2,7 @@
 
 @font-face {
   font-family: 'SVN-Nexa';
-  src: url('./font/SVN-Nexa%20Rush%20Sans%20Black.ttf') format('truetype');
+  src: url('../assets/fonts/SVN-Nexa%20Rush%20Sans%20Black.ttf') format('truetype');
 }
 
 :root {

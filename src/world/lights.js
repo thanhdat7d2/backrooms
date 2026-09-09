@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { state, CONFIG } from './state.js';
+import { state, CONFIG } from '../state.js';
 
 const _LIGHT_ON_DIST_SQ = 20.0 * 20.0; // activate within 20m
 

@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { state, CONFIG, DOM } from './state.js';
+import { state, CONFIG, DOM } from '../state.js';
 import { MazeGenerator } from './maze.js';
 import { updateDynamicLights } from './lights.js';
-import { updateHealthHUD } from './physics.js';
+import { updateHealthHUD } from '../systems/physics.js';
 import { createEPromptSprite, updateDoorCollider } from './door.js';
 import { furnishRooms } from './furniture.js';
 

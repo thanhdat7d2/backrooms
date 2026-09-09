@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { state, CONFIG, DOM } from './state.js';
+import { state, CONFIG, DOM } from '../state.js';
 
 const textureLoader = new THREE.TextureLoader();
 
@@ -36,9 +36,9 @@ export const loadSingleTex = (url) => {
 
 export function loadSkinTextures(skinName) {
   return new Promise((resolve, reject) => {
-    const wallUrl = `img/skin/${skinName}/wall_tile.png`;
-    const ceilUrl = `img/skin/${skinName}/ceiling_tile.png`;
-    const floorUrl = `img/skin/${skinName}/floor_tile.png`;
+    const wallUrl = `assets/images/skin/${skinName}/wall_tile.png`;
+    const ceilUrl = `assets/images/skin/${skinName}/ceiling_tile.png`;
+    const floorUrl = `assets/images/skin/${skinName}/floor_tile.png`;
 
     Promise.all([
       loadTex(wallUrl),

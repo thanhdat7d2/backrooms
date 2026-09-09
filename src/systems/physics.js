@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { state, CONFIG } from './state.js';
+import { state, CONFIG } from '../state.js';
 
 export function updateHealthHUD() {
   const fill = document.getElementById('health-bar-fill');

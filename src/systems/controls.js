@@ -1,7 +1,7 @@
-import { state, CONFIG, DOM } from './state.js';
+import { state, CONFIG, DOM } from '../state.js';
 import { updateBackgroundAudioVolume, initAudio, initFootsteps } from './audio.js';
 import { toggleNavigationLine } from './navigation.js';
-import { interactWithDoor } from './door.js';
+import { interactWithDoor } from '../world/door.js';
 
 export function updateDistanceHUD() {
   if (!state.controls) return;

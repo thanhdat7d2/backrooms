@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { state, CONFIG, DOM } from './state.js';
+import { state, CONFIG, DOM } from '../state.js';
 
 const audioLoader = new THREE.AudioLoader();
 
@@ -30,7 +30,7 @@ export function updateBackgroundAudioVolume(isPlaying) {
 
 export function initAudio() {
   if (!state.backgroundAudio) {
-    state.backgroundAudio = new Audio('audio/background_audio.mp3');
+    state.backgroundAudio = new Audio('assets/audio/background_audio.mp3');
     state.backgroundAudio.loop = true;
     updateBackgroundAudioVolume(false);
   }
@@ -43,12 +43,12 @@ export function initFootsteps() {
   if (!state.footstepSounds) {
     state.footstepSounds = {
       left: [
-        new Audio('audio/left1.mp3'),
-        new Audio('audio/left2.mp3')
+        new Audio('assets/audio/left1.mp3'),
+        new Audio('assets/audio/left2.mp3')
       ],
       right: [
-        new Audio('audio/right1.mp3'),
-        new Audio('audio/right2.mp3')
+        new Audio('assets/audio/right1.mp3'),
+        new Audio('assets/audio/right2.mp3')
       ]
     };
     Object.values(state.footstepSounds).forEach(arr => {
@@ -104,7 +104,7 @@ export function playSpookySound(soundNode) {
 
 export function playMonsterHitSound() {
   if (!state.audioListener) return;
-  const scareSounds = ['audio/scary/jumpscare1.mp3', 'audio/scary/jumpscare2.mp3'];
+  const scareSounds = ['assets/audio/scary/jumpscare1.mp3', 'assets/audio/scary/jumpscare2.mp3'];
   const scareUrl = scareSounds[Math.floor(Math.random() * scareSounds.length)];
   const buffer = state.preloadedScaryAudioBuffers[scareUrl];
   if (buffer) {

@@ -11,47 +11,47 @@ export const CONFIG = {
   LIGHT_POOL_SIZE: 6, // Max active PointLights in scene
 
   WALL_PIC_FILES: [
-    'img/wall/wall (1).jpg',
-    'img/wall/wall (1).png',
-    'img/wall/wall (1).webp',
-    'img/wall/wall (2).jpg',
-    'img/wall/wall (2).png',
-    'img/wall/wall (2).webp',
-    'img/wall/wall (3).jpg',
-    'img/wall/wall (3).png',
-    'img/wall/wall (4).jpg',
-    'img/wall/wall (4).png',
-    'img/wall/wall (5).png',
-    'img/wall/wall (6).png'
+    'assets/images/wall/wall (1).jpg',
+    'assets/images/wall/wall (1).png',
+    'assets/images/wall/wall (1).webp',
+    'assets/images/wall/wall (2).jpg',
+    'assets/images/wall/wall (2).png',
+    'assets/images/wall/wall (2).webp',
+    'assets/images/wall/wall (3).jpg',
+    'assets/images/wall/wall (3).png',
+    'assets/images/wall/wall (4).jpg',
+    'assets/images/wall/wall (4).png',
+    'assets/images/wall/wall (5).png',
+    'assets/images/wall/wall (6).png'
   ],
 
   CHASE_PIC_FILES: [
-    'img/chase/chase_1.png',
-    'img/chase/chase_2.png',
-    'img/chase/chase_3.png',
-    'img/chase/chase_4.png',
-    'img/chase/chase_5.png',
-    'img/chase/chase_6.png',
-    'img/chase/chase_7.png'
+    'assets/images/chase/chase_1.png',
+    'assets/images/chase/chase_2.png',
+    'assets/images/chase/chase_3.png',
+    'assets/images/chase/chase_4.png',
+    'assets/images/chase/chase_5.png',
+    'assets/images/chase/chase_6.png',
+    'assets/images/chase/chase_7.png'
   ],
 
   SCARY_AUDIO_FILES: [
-    'audio/scary/chuiui.mp3',
-    'audio/scary/dont_leave_me.mp3',
-    'audio/scary/jumpscare1.mp3',
-    'audio/scary/jumpscare2.mp3',
-    'audio/scary/manyghost.mp3',
-    'audio/scary/mew.mp3',
-    'audio/scary/piano.mp3',
-    'audio/scary/thrilling.mp3'
+    'assets/audio/scary/chuiui.mp3',
+    'assets/audio/scary/dont_leave_me.mp3',
+    'assets/audio/scary/jumpscare1.mp3',
+    'assets/audio/scary/jumpscare2.mp3',
+    'assets/audio/scary/manyghost.mp3',
+    'assets/audio/scary/mew.mp3',
+    'assets/audio/scary/piano.mp3',
+    'assets/audio/scary/thrilling.mp3'
   ],
 
   CHASE_AUDIO_FILES: [
-    'audio/scary/chuiui.mp3',
-    'audio/scary/dont_leave_me.mp3',
-    'audio/scary/jumpscare1.mp3',
-    'audio/scary/jumpscare2.mp3',
-    'audio/scary/mew.mp3'
+    'assets/audio/scary/chuiui.mp3',
+    'assets/audio/scary/dont_leave_me.mp3',
+    'assets/audio/scary/jumpscare1.mp3',
+    'assets/audio/scary/jumpscare2.mp3',
+    'assets/audio/scary/mew.mp3'
   ]
 };
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { state } from './state.js';
+import { state } from '../state.js';
 
 export function findPathToExit() {
   if (!state.mazeData || !state.mazeData.hWalls || !state.mazeData.vWalls) return [];

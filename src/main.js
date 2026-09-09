@@ -1,16 +1,16 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/PointerLockControls.js';
 import { state, CONFIG, DOM } from './state.js';
-import { loadTex, loadSingleTex, initSkinSelector } from './texture.js';
-import { loadAudioBuffer, initAudioUI } from './audio.js';
-import { processMovement, updateHealthHUD } from './physics.js';
-import { updateDynamicLights } from './lights.js';
-import { updateWallPicturesSpooky, updateChaseMonster, triggerExitFlash, updateSpookyAudio } from './spooky.js';
-import { updateNavigationLine } from './navigation.js';
-import { setupControls, updateDistanceHUD } from './controls.js';
-import { buildMaze } from './builder.js';
-import { updateDoors } from './door.js';
-import { preloadFurnitureModels } from './furniture.js';
+import { loadTex, loadSingleTex, initSkinSelector } from './systems/texture.js';
+import { loadAudioBuffer, initAudioUI } from './systems/audio.js';
+import { processMovement, updateHealthHUD } from './systems/physics.js';
+import { updateDynamicLights } from './world/lights.js';
+import { updateWallPicturesSpooky, updateChaseMonster, triggerExitFlash, updateSpookyAudio } from './systems/spooky.js';
+import { updateNavigationLine } from './systems/navigation.js';
+import { setupControls, updateDistanceHUD } from './systems/controls.js';
+import { buildMaze } from './world/builder.js';
+import { updateDoors } from './world/door.js';
+import { preloadFurnitureModels } from './world/furniture.js';
 
 // --- THREE.JS SETUP ---
 function initEngine() {
@@ -151,11 +151,11 @@ function animate() {
 
 window.onload = () => {
   const basePromises = [
-    loadTex('img/skin/backroom/wall_tile.png'),
-    loadTex('img/skin/backroom/ceiling_tile.png'),
-    loadTex('img/skin/backroom/floor_tile.png'),
-    loadTex('img/skin/backroom/door.png'),
-    loadTex('img/skin/backroom/door_sides.png')
+    loadTex('assets/images/skin/backroom/wall_tile.png'),
+    loadTex('assets/images/skin/backroom/ceiling_tile.png'),
+    loadTex('assets/images/skin/backroom/floor_tile.png'),
+    loadTex('assets/images/skin/backroom/door.png'),
+    loadTex('assets/images/skin/backroom/door_sides.png')
   ];
 
   const wallPicPromises = CONFIG.WALL_PIC_FILES.map(url => loadSingleTex(url));

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { state, CONFIG } from './state.js';
+import { state, CONFIG } from '../state.js';
 
 export function createEPromptSprite() {
   const canvas = document.createElement('canvas');
@@ -130,7 +130,7 @@ export function interactWithDoor() {
 
   // Play open/close sound using audio/open.mp3 and audio/close.mp3
   if (!state.soundMuted) {
-    const soundPath = door.isOpen ? 'audio/open.mp3' : 'audio/close.mp3';
+    const soundPath = door.isOpen ? 'assets/audio/open.mp3' : 'assets/audio/close.mp3';
     const audio = new Audio(soundPath);
     audio.volume = 1.0;
     audio.play().catch(err => {

@@ -1,42 +1,42 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { state, CONFIG } from './state.js';
-import { loadTex } from './texture.js';
+import { state, CONFIG } from '../state.js';
+import { loadTex } from '../systems/texture.js';
 
 const gltfLoader = new GLTFLoader();
 
 // Catalog of downloaded CC0 Poly Haven realistic 3D models
 export const MODEL_CATALOG = {
   // Sofas
-  sofa_01: { url: 'models/Sofa_01/Sofa_01_1k.gltf', targetHeight: 0.90 },
-  sofa_03: { url: 'models/sofa_03/sofa_03_1k.gltf', targetHeight: 0.88 },
+  sofa_01: { url: 'assets/models/Sofa_01/Sofa_01_1k.gltf', targetHeight: 0.90 },
+  sofa_03: { url: 'assets/models/sofa_03/sofa_03_1k.gltf', targetHeight: 0.88 },
 
   // Chairs
-  armchair_01: { url: 'models/ArmChair_01/ArmChair_01_1k.gltf', targetHeight: 0.95 },
-  wooden_chair: { url: 'models/WoodenChair_01/WoodenChair_01_1k.gltf', targetHeight: 0.92 },
+  armchair_01: { url: 'assets/models/ArmChair_01/ArmChair_01_1k.gltf', targetHeight: 0.95 },
+  wooden_chair: { url: 'assets/models/WoodenChair_01/WoodenChair_01_1k.gltf', targetHeight: 0.92 },
 
   // Tables
-  coffee_table: { url: 'models/CoffeeTable_01/CoffeeTable_01_1k.gltf', targetHeight: 0.48 },
-  wooden_table: { url: 'models/WoodenTable_01/WoodenTable_01_1k.gltf', targetHeight: 0.78 },
-  side_table: { url: 'models/side_table_01/side_table_01_1k.gltf', targetHeight: 0.62 },
+  coffee_table: { url: 'assets/models/CoffeeTable_01/CoffeeTable_01_1k.gltf', targetHeight: 0.48 },
+  wooden_table: { url: 'assets/models/WoodenTable_01/WoodenTable_01_1k.gltf', targetHeight: 0.78 },
+  side_table: { url: 'assets/models/side_table_01/side_table_01_1k.gltf', targetHeight: 0.62 },
 
   // Lamps
-  desk_lamp: { url: 'models/desk_lamp_arm_01/desk_lamp_arm_01_1k.gltf', targetHeight: 0.55 },
-  ceiling_lamp: { url: 'models/modern_ceiling_lamp_01/modern_ceiling_lamp_01_1k.gltf', targetHeight: 0.35 },
+  desk_lamp: { url: 'assets/models/desk_lamp_arm_01/desk_lamp_arm_01_1k.gltf', targetHeight: 0.55 },
+  ceiling_lamp: { url: 'assets/models/modern_ceiling_lamp_01/modern_ceiling_lamp_01_1k.gltf', targetHeight: 0.35 },
 
   // Shelves
-  shelf_01: { url: 'models/Shelf_01/Shelf_01_1k.gltf', targetHeight: 1.85 },
-  bookshelf_worn: { url: 'models/wooden_bookshelf_worn/wooden_bookshelf_worn_1k.gltf', targetHeight: 1.95 },
-  painted_shelves: { url: 'models/painted_wooden_shelves/painted_wooden_shelves_1k.gltf', targetHeight: 1.80 },
+  shelf_01: { url: 'assets/models/Shelf_01/Shelf_01_1k.gltf', targetHeight: 1.85 },
+  bookshelf_worn: { url: 'assets/models/wooden_bookshelf_worn/wooden_bookshelf_worn_1k.gltf', targetHeight: 1.95 },
+  painted_shelves: { url: 'assets/models/painted_wooden_shelves/painted_wooden_shelves_1k.gltf', targetHeight: 1.80 },
 
   // TVs
-  tv_01: { url: 'models/Television_01/Television_01_1k.gltf', targetHeight: 0.55 },
-  tv_02: { url: 'models/television_02/television_02_1k.gltf', targetHeight: 0.52 },
+  tv_01: { url: 'assets/models/Television_01/Television_01_1k.gltf', targetHeight: 0.55 },
+  tv_02: { url: 'assets/models/television_02/television_02_1k.gltf', targetHeight: 0.52 },
 
   // Windows & Wall Decor
-  window_01: { url: 'models/rollershutter_window_01/rollershutter_window_01_1k.gltf', targetHeight: 1.45 },
-  wall_clock: { url: 'models/wall_clock/wall_clock_1k.gltf', targetHeight: 0.42 },
-  ornate_mirror: { url: 'models/ornate_mirror_01/ornate_mirror_01_1k.gltf', targetHeight: 1.15 }
+  window_01: { url: 'assets/models/rollershutter_window_01/rollershutter_window_01_1k.gltf', targetHeight: 1.45 },
+  wall_clock: { url: 'assets/models/wall_clock/wall_clock_1k.gltf', targetHeight: 0.42 },
+  ornate_mirror: { url: 'assets/models/ornate_mirror_01/ornate_mirror_01_1k.gltf', targetHeight: 1.15 }
 };
 
 function loadGLTFModel(key, def) {
@@ -97,9 +97,9 @@ export function preloadFurnitureModels() {
   const modelPromises = Object.entries(MODEL_CATALOG).map(([key, def]) => loadGLTFModel(key, def));
 
   const carpetPromises = [
-    loadTex('img/carpet/dirty_carpet_diffuse.jpg').catch(() => null),
-    loadTex('img/carpet/dirty_carpet_nor_gl.jpg').catch(() => null),
-    loadTex('img/carpet/dirty_carpet_rough.jpg').catch(() => null)
+    loadTex('assets/images/carpet/dirty_carpet_diffuse.jpg').catch(() => null),
+    loadTex('assets/images/carpet/dirty_carpet_nor_gl.jpg').catch(() => null),
+    loadTex('assets/images/carpet/dirty_carpet_rough.jpg').catch(() => null)
   ];
 
   return Promise.all([
