@@ -8,9 +8,9 @@ import { updateDynamicLights } from './world/lights.js';
 import { updateWallPicturesSpooky, updateChaseMonster, triggerExitFlash, updateSpookyAudio } from './systems/spooky.js';
 import { updateNavigationLine } from './systems/navigation.js';
 import { setupControls, updateDistanceHUD } from './systems/controls.js';
-import { buildMaze } from './world/builder.js';
+import { buildMaze, buildSpookyWallPictures } from './world/builder.js';
 import { updateDoors } from './world/door.js';
-import { preloadFurnitureModels } from './world/furniture.js';
+import { preloadFurnitureModels, furnishRooms, updateFurnitureVisibility } from './world/furniture.js';
 
 // --- THREE.JS SETUP ---
 function initEngine() {
@@ -30,7 +30,7 @@ function initEngine() {
   state.scene.add(state.cameraContainer);
 
   state.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
-  state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // Cap pixel ratio for performance
+  state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25)); // Cap pixel ratio for smooth FPS
   state.renderer.setSize(window.innerWidth, window.innerHeight);
   state.renderer.shadowMap.enabled = true;
   state.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -123,6 +123,9 @@ function animate() {
     // Dynamically manage PointLights
     updateDynamicLights();
 
+    // Cull distant room furniture beyond fog range
+    updateFurnitureVisibility();
+
     // Spooky checks for wall pictures
     updateWallPicturesSpooky();
 
@@ -149,7 +152,38 @@ function animate() {
   state.renderer.render(state.scene, state.camera);
 }
 
+function preloadBackgroundAssets() {
+  // Load wall pictures in background and place them once ready
+  Promise.all(CONFIG.WALL_PIC_FILES.map(url => loadSingleTex(url))).then(wallPics => {
+    state.wallPicTextures = wallPics.filter(p => p.texture !== null);
+    buildSpookyWallPictures();
+  });
+
+  // Load chase monster textures in background
+  Promise.all(CONFIG.CHASE_PIC_FILES.map(url => loadSingleTex(url))).then(chasePics => {
+    state.chasePicTextures = chasePics.filter(p => p.texture !== null);
+  });
+
+  // Load scary audio buffers in background
+  Promise.all(CONFIG.SCARY_AUDIO_FILES.map(url => loadAudioBuffer(url))).then(scaryAudios => {
+    scaryAudios.forEach(item => {
+      if (item && item.buffer) {
+        state.preloadedScaryAudioBuffers[item.url] = item.buffer;
+      }
+    });
+  });
+
+  // Load 3D furniture models & carpet PBR textures in background and furnish active maze once ready
+  preloadFurnitureModels()
+    .then(() => {
+      state.furnitureLoaded = true;
+      furnishRooms();
+    })
+    .catch(err => console.warn("Furniture preload failed:", err));
+}
+
 window.onload = () => {
+  // Only block startup on the 5 essential base textures so the game boots immediately
   const basePromises = [
     loadTex('assets/images/skin/backroom/wall_tile.png'),
     loadTex('assets/images/skin/backroom/ceiling_tile.png'),
@@ -158,33 +192,12 @@ window.onload = () => {
     loadTex('assets/images/skin/backroom/door_sides.png')
   ];
 
-  const wallPicPromises = CONFIG.WALL_PIC_FILES.map(url => loadSingleTex(url));
-  const chasePicPromises = CONFIG.CHASE_PIC_FILES.map(url => loadSingleTex(url));
-  const scaryAudioPromises = CONFIG.SCARY_AUDIO_FILES.map(url => loadAudioBuffer(url));
-
-  Promise.all([
-    ...basePromises,
-    Promise.all(wallPicPromises),
-    Promise.all(chasePicPromises),
-    Promise.all(scaryAudioPromises),
-    preloadFurnitureModels().catch(err => console.warn("Furniture preload failed:", err))
-  ]).then(([wallTex, ceilingTex, floorTex, doorTex, doorSidesTex, wallPics, chasePics, scaryAudios]) => {
+  Promise.all(basePromises).then(([wallTex, ceilingTex, floorTex, doorTex, doorSidesTex]) => {
     state.wallTexture = wallTex;
     state.ceilingTexture = ceilingTex;
     state.floorTexture = floorTex;
     state.doorTexture = doorTex;
     state.doorSidesTexture = doorSidesTex;
-
-    // Save preloaded textures
-    state.wallPicTextures = wallPics.filter(p => p.texture !== null);
-    state.chasePicTextures = chasePics.filter(p => p.texture !== null);
-
-    // Save preloaded audio buffers
-    scaryAudios.forEach(item => {
-      if (item && item.buffer) {
-        state.preloadedScaryAudioBuffers[item.url] = item.buffer;
-      }
-    });
 
     // Initialize the global wall material
     state.wallMaterialGlobal = new THREE.MeshStandardMaterial({
@@ -199,21 +212,23 @@ window.onload = () => {
 
     initSkinSelector();
     initAudioUI();
-  }).catch(err => {
-    console.error("Failed to load textures/audio: ", err);
 
-    // Fallback global material
+    // Stream heavy assets (GLTF furniture, horror audio, wall/chase art) in the background
+    preloadBackgroundAssets();
+  }).catch(err => {
+    console.error("Failed to load base textures: ", err);
+
     state.wallMaterialGlobal = new THREE.MeshStandardMaterial({
       color: 0x888888,
       roughness: 0.8,
       metalness: 0.15
     });
 
-    // Fallback start anyway
     initEngine();
     buildMaze(state.currentLevel);
     animate();
     initSkinSelector();
     initAudioUI();
+    preloadBackgroundAssets();
   });
 };

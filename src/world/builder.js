@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { state, CONFIG, DOM } from '../state.js';
 import { MazeGenerator } from './maze.js';
 import { updateDynamicLights } from './lights.js';
@@ -136,6 +137,11 @@ export function buildMaze(level) {
   state.scene.add(ambientLight);
 
   // Reset states
+  state.mazeBuildId++;
+  state.wallPicsBuiltForId = -1;
+  state.furnitureBuiltForId = -1;
+  state.roomFurnitureGroups = [];
+  state.lastFurnitureCullPos.set(9999, 9999, 9999);
   state.gridColliders = {};
   state.lightObjects = [];
   state.activeLights = [];
@@ -204,7 +210,7 @@ export function buildMaze(level) {
   ceilMat.map.wrapS = THREE.RepeatWrapping;
   ceilMat.map.wrapT = THREE.RepeatWrapping;
   const mainCeiling = new THREE.Mesh(ceilGeo, ceilMat);
-  mainCeiling.position.set(0, CONFIG.WALL_HEIGHT * 3, 0);
+  mainCeiling.position.set(0, CONFIG.WALL_HEIGHT, 0);
   mainCeiling.rotation.x = Math.PI / 2;
   mainCeiling.receiveShadow = true;
   state.scene.add(mainCeiling);
@@ -272,28 +278,28 @@ export function buildMaze(level) {
     const worldX = light.x;
     const worldZ = light.z;
     const lightFixture = new THREE.Mesh(lightFixtureGeometry, lightSourceMaterial);
-    lightFixture.position.set(worldX, CONFIG.WALL_HEIGHT * 3 - 0.005, worldZ);
+    lightFixture.position.set(worldX, CONFIG.WALL_HEIGHT - 0.005, worldZ);
     lightFixture.rotation.x = Math.PI / 2;
     state.scene.add(lightFixture);
 
     // Instantiate shadow-casting main light centered on the tile
-    const pLight = new THREE.PointLight(0xffffff, 8.0, 22.0, 1.2);
-    pLight.position.set(worldX, CONFIG.WALL_HEIGHT * 3 - 0.35, worldZ);
+    const pLight = new THREE.PointLight(0xffffff, 3.5, 8.5, 1.2);
+    pLight.position.set(worldX, CONFIG.WALL_HEIGHT - 0.35, worldZ);
     pLight.castShadow = true;
     pLight.shadow.camera.near = 0.05;
-    pLight.shadow.camera.far = 25.0;
+    pLight.shadow.camera.far = 15.0;
     pLight.shadow.bias = 0.0002;
     pLight.shadow.normalBias = 0.08;
     pLight.shadow.radius = 1.5;
-    pLight.shadow.mapSize.width = 512;
-    pLight.shadow.mapSize.height = 512;
+    pLight.shadow.mapSize.width = 256;
+    pLight.shadow.mapSize.height = 256;
     pLight.shadow.autoUpdate = false;
     pLight.shadow.needsUpdate = true;
 
     // Non-shadow-casting bounce light to simulate indirect global illumination.
-    const bounceRange = 22.0;
-    const pLightBounce = new THREE.PointLight(0xffecc4, 4.0, bounceRange, 1.0);
-    pLightBounce.position.set(worldX, CONFIG.WALL_HEIGHT * 3 - 0.35, worldZ);
+    const bounceRange = cellSize / 2 + 0.35;
+    const pLightBounce = new THREE.PointLight(0xffecc4, 1.8, bounceRange, 1.0);
+    pLightBounce.position.set(worldX, CONFIG.WALL_HEIGHT - 0.35, worldZ);
     pLightBounce.castShadow = false;
 
     state.lightObjects.push({
@@ -333,22 +339,43 @@ export function buildMaze(level) {
 
 
 
-  // 3. Build Walls
+  // 3. Build Walls (merged into a single static mesh to minimize draw calls)
+  const wallGeometries = [];
+
+  // Shared door materials (created once per level instead of per door)
+  let sharedDoorMaterials = null;
+  const getSharedDoorMaterials = () => {
+    if (!sharedDoorMaterials && state.doorTexture && state.doorSidesTexture) {
+      const doorTexFront = state.doorTexture;
+      const doorTexBack = state.doorTexture.clone();
+      doorTexBack.wrapS = THREE.RepeatWrapping;
+      doorTexBack.repeat.x = -1;
+      doorTexBack.offset.x = 1;
+      doorTexBack.needsUpdate = true;
+
+      const doorSidesMat = new THREE.MeshStandardMaterial({ map: state.doorSidesTexture, roughness: 0.7 });
+      const doorFrontMat = new THREE.MeshStandardMaterial({ map: doorTexFront, roughness: 0.5 });
+      const doorBackMat = new THREE.MeshStandardMaterial({ map: doorTexBack, roughness: 0.5 });
+
+      sharedDoorMaterials = [
+        doorSidesMat, // +X
+        doorSidesMat, // -X
+        doorSidesMat, // +Y
+        doorSidesMat, // -Y
+        doorFrontMat, // +Z (Front)
+        doorBackMat   // -Z (Back)
+      ];
+    }
+    return sharedDoorMaterials;
+  };
+
   state.mazeData.walls.forEach(wall => {
     const isHoriz = wall.type === 'horizontal' || wall.type === 'boundary-horizontal';
     const isBoundary = wall.type.startsWith('boundary-');
     const thickness = isHoriz ? 0.400 : 0.402;
     const length = wall.length;
     const wallLength = length + (isHoriz ? 0.400 : 0.398);
-
-    // Varying height from reached the ceiling (CONFIG.WALL_HEIGHT * 3) to just above player's head (2.0m)
-    const minHeight = CONFIG.EYE_HEIGHT + 0.4;
-    const maxHeight = CONFIG.WALL_HEIGHT * 3;
-    let wallHeight = isBoundary ? maxHeight : (minHeight + Math.random() * (maxHeight - minHeight));
-    
-    if (wall.hole) {
-      wallHeight = Math.max(wallHeight, wall.hole.yTop + 0.3);
-    }
+    const wallHeight = CONFIG.WALL_HEIGHT + 0.4 + (isHoriz ? 0.000 : 0.005);
 
     if (wall.hole) {
       const hole = wall.hole;
@@ -369,14 +396,10 @@ export function buildMaze(level) {
 
         const geom = new THREE.BoxGeometry(sizeX, sizeY, sizeZ);
         adjustBoxUVs(geom, sizeX, sizeY, sizeZ, isHoriz, 0, 0);
-
-        const mesh = new THREE.Mesh(geom, state.wallMaterialGlobal);
         const px = isHoriz ? wall.x + uCenter : wall.x;
         const pz = isHoriz ? wall.z : wall.z + uCenter;
-        mesh.position.set(px, H_mesh / 2, pz);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        state.scene.add(mesh);
+        geom.translate(px, H_mesh / 2, pz);
+        wallGeometries.push(geom);
 
         const colBox = createSubBoxCollider(wall, isHoriz, uCenter, L_left, 0, H_mesh, T_mesh);
         addColliderForCells(wall, colBox);
@@ -392,14 +415,10 @@ export function buildMaze(level) {
 
         const geom = new THREE.BoxGeometry(sizeX, sizeY, sizeZ);
         adjustBoxUVs(geom, sizeX, sizeY, sizeZ, isHoriz, L_left + hole.width, 0);
-
-        const mesh = new THREE.Mesh(geom, state.wallMaterialGlobal);
         const px = isHoriz ? wall.x + uCenter : wall.x;
         const pz = isHoriz ? wall.z : wall.z + uCenter;
-        mesh.position.set(px, H_mesh / 2, pz);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        state.scene.add(mesh);
+        geom.translate(px, H_mesh / 2, pz);
+        wallGeometries.push(geom);
 
         const colBox = createSubBoxCollider(wall, isHoriz, uCenter, L_right, 0, H_mesh, T_mesh);
         addColliderForCells(wall, colBox);
@@ -417,14 +436,10 @@ export function buildMaze(level) {
 
         const geom = new THREE.BoxGeometry(sizeX, sizeY, sizeZ);
         adjustBoxUVs(geom, sizeX, sizeY, sizeZ, isHoriz, L_left, 0);
-
-        const mesh = new THREE.Mesh(geom, state.wallMaterialGlobal);
         const px = isHoriz ? wall.x + uCenterMid : wall.x;
         const pz = isHoriz ? wall.z : wall.z + uCenterMid;
-        mesh.position.set(px, sizeY / 2, pz);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        state.scene.add(mesh);
+        geom.translate(px, sizeY / 2, pz);
+        wallGeometries.push(geom);
 
         const colBox = createSubBoxCollider(wall, isHoriz, uCenterMid, W, 0, hole.yBottom, T_mesh);
         addColliderForCells(wall, colBox);
@@ -439,14 +454,10 @@ export function buildMaze(level) {
 
         const geom = new THREE.BoxGeometry(sizeX, sizeY, sizeZ);
         adjustBoxUVs(geom, sizeX, sizeY, sizeZ, isHoriz, L_left, hole.yTop);
-
-        const mesh = new THREE.Mesh(geom, state.wallMaterialGlobal);
         const px = isHoriz ? wall.x + uCenterMid : wall.x;
         const pz = isHoriz ? wall.z : wall.z + uCenterMid;
-        mesh.position.set(px, hole.yTop + sizeY / 2, pz);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        state.scene.add(mesh);
+        geom.translate(px, hole.yTop + sizeY / 2, pz);
+        wallGeometries.push(geom);
 
         const colBox = createSubBoxCollider(wall, isHoriz, uCenterMid, W, hole.yTop, H_mesh, T_mesh);
         addColliderForCells(wall, colBox);
@@ -494,26 +505,7 @@ export function buildMaze(level) {
 
         // Geometry is ALWAYS standard vertical door dimensions (no stretching)
         const doorGeom = new THREE.BoxGeometry(w_door, h_door, t_door);
-
-        const doorTexFront = state.doorTexture;
-        const doorTexBack = state.doorTexture.clone();
-        doorTexBack.wrapS = THREE.RepeatWrapping;
-        doorTexBack.repeat.x = -1;
-        doorTexBack.offset.x = 1;
-        doorTexBack.needsUpdate = true;
-
-        const doorSidesMat = new THREE.MeshStandardMaterial({ map: state.doorSidesTexture, roughness: 0.7 });
-        const doorFrontMat = new THREE.MeshStandardMaterial({ map: doorTexFront, roughness: 0.5 });
-        const doorBackMat = new THREE.MeshStandardMaterial({ map: doorTexBack, roughness: 0.5 });
-
-        const materials = [
-          doorSidesMat, // +X
-          doorSidesMat, // -X
-          doorSidesMat, // +Y
-          doorSidesMat, // -Y
-          doorFrontMat, // +Z (Front)
-          doorBackMat   // -Z (Back)
-        ];
+        const materials = getSharedDoorMaterials() || state.wallMaterialGlobal;
 
         const doorMesh = new THREE.Mesh(doorGeom, materials);
 
@@ -596,12 +588,8 @@ export function buildMaze(level) {
 
       const geometry = new THREE.BoxGeometry(sizeX, sizeY, sizeZ);
       adjustBoxUVs(geometry, sizeX, sizeY, sizeZ, isHoriz, 0, 0);
-
-      const wallMesh = new THREE.Mesh(geometry, state.wallMaterialGlobal);
-      wallMesh.position.set(wall.x, sizeY / 2, wall.z);
-      wallMesh.castShadow = true;
-      wallMesh.receiveShadow = true;
-      state.scene.add(wallMesh);
+      geometry.translate(wall.x, sizeY / 2, wall.z);
+      wallGeometries.push(geometry);
 
       // Bounding box for 3D physics
       const colBox = {
@@ -616,19 +604,13 @@ export function buildMaze(level) {
     }
   });
 
-
-
-  // 4. Build Pillars in Rooms
+  // 4. Build Pillars in Rooms (merged into the same static geometry batch)
   state.mazeData.pillars.forEach(pillar => {
-    const pillarHeight = CONFIG.WALL_HEIGHT * 3;
+    const pillarHeight = CONFIG.WALL_HEIGHT;
     const geometry = new THREE.BoxGeometry(pillar.w, pillarHeight, pillar.l);
     adjustBoxUVs(geometry, pillar.w, pillarHeight, pillar.l, false, 0, 0);
-
-    const pillarMesh = new THREE.Mesh(geometry, state.wallMaterialGlobal);
-    pillarMesh.position.set(pillar.x, pillarHeight / 2, pillar.z);
-    pillarMesh.castShadow = true;
-    pillarMesh.receiveShadow = true;
-    state.scene.add(pillarMesh);
+    geometry.translate(pillar.x, pillarHeight / 2, pillar.z);
+    wallGeometries.push(geometry);
 
     // AABB bounds
     const boundingBox = {
@@ -646,15 +628,62 @@ export function buildMaze(level) {
     state.gridColliders[key].push({ type: 'pillar', box: boundingBox });
   });
 
-  // 5. Build Spooky Wall Pictures
-  if (state.wallPicTextures.length > 0) {
-    const solidInnerWalls = state.mazeData.walls.filter(w => (w.type === 'horizontal' || w.type === 'vertical') && !w.hole);
-    const shuffledWalls = [...solidInnerWalls].sort(() => Math.random() - 0.5);
-    const numPics = Math.max(12, Math.floor(solidInnerWalls.length * 0.04));
+  if (wallGeometries.length > 0) {
+    const mergedWallsGeo = mergeGeometries(wallGeometries, false);
+    wallGeometries.forEach(g => g.dispose());
+    if (mergedWallsGeo) {
+      const mergedWallsMesh = new THREE.Mesh(mergedWallsGeo, state.wallMaterialGlobal);
+      mergedWallsMesh.castShadow = true;
+      mergedWallsMesh.receiveShadow = true;
+      state.scene.add(mergedWallsMesh);
+    }
+  }
 
-    let selectedWalls = [];
-    let minDist = 10.0;
+  // 5. Build Spooky Wall Pictures (if already preloaded; otherwise called when background load completes)
+  buildSpookyWallPictures();
 
+  // 6. Furnish rooms (if models are already preloaded; otherwise called when background load completes)
+  if (state.furnitureLoaded) {
+    furnishRooms();
+  }
+
+  // Force first-frame light check
+  updateDynamicLights(true);
+}
+
+export function buildSpookyWallPictures() {
+  if (!state.mazeData || !state.scene) return;
+  if (state.wallPicsBuiltForId === state.mazeBuildId) return;
+  if (state.wallPicTextures.length === 0) return;
+  state.wallPicsBuiltForId = state.mazeBuildId;
+
+  const solidInnerWalls = state.mazeData.walls.filter(w => (w.type === 'horizontal' || w.type === 'vertical') && !w.hole);
+  const shuffledWalls = [...solidInnerWalls].sort(() => Math.random() - 0.5);
+  const numPics = Math.max(12, Math.floor(solidInnerWalls.length * 0.04));
+
+  let selectedWalls = [];
+  let minDist = 10.0;
+
+  for (const wall of shuffledWalls) {
+    let tooClose = false;
+    for (const sel of selectedWalls) {
+      const dx = wall.x - sel.x;
+      const dz = wall.z - sel.z;
+      const dSq = dx * dx + dz * dz;
+      if (dSq < minDist * minDist) {
+        tooClose = true;
+        break;
+      }
+    }
+    if (!tooClose) {
+      selectedWalls.push(wall);
+    }
+    if (selectedWalls.length >= numPics) break;
+  }
+
+  if (selectedWalls.length < 8 && solidInnerWalls.length >= 8) {
+    selectedWalls = [];
+    minDist = 6.5;
     for (const wall of shuffledWalls) {
       let tooClose = false;
       for (const sel of selectedWalls) {
@@ -671,116 +700,88 @@ export function buildMaze(level) {
       }
       if (selectedWalls.length >= numPics) break;
     }
-
-    if (selectedWalls.length < 8 && solidInnerWalls.length >= 8) {
-      selectedWalls = [];
-      minDist = 6.5;
-      for (const wall of shuffledWalls) {
-        let tooClose = false;
-        for (const sel of selectedWalls) {
-          const dx = wall.x - sel.x;
-          const dz = wall.z - sel.z;
-          const dSq = dx * dx + dz * dz;
-          if (dSq < minDist * minDist) {
-            tooClose = true;
-            break;
-          }
-        }
-        if (!tooClose) {
-          selectedWalls.push(wall);
-        }
-        if (selectedWalls.length >= numPics) break;
-      }
-    }
-
-    selectedWalls.forEach((wall, index) => {
-      const texObj = state.wallPicTextures[index % state.wallPicTextures.length];
-      if (!texObj || !texObj.texture) return;
-      const texture = texObj.texture;
-
-      const img = texture.image;
-      const aspect = img ? (img.width / img.height) : 1.0;
-
-      const height = 0.6 + Math.random() * (CONFIG.WALL_HEIGHT - 0.2 - 0.6);
-      const width = height * aspect;
-
-      let finalWidth = width;
-      let finalHeight = height;
-      const maxWidth = wall.length * 0.95;
-      if (finalWidth > maxWidth) {
-        finalWidth = maxWidth;
-        finalHeight = finalWidth / aspect;
-      }
-
-      if (finalHeight > CONFIG.WALL_HEIGHT - 0.2) {
-        finalHeight = CONFIG.WALL_HEIGHT - 0.2;
-        finalWidth = finalHeight * aspect;
-      }
-
-      const planeGeom = new THREE.PlaneGeometry(finalWidth, finalHeight);
-
-      const mat = new THREE.MeshStandardMaterial({
-        map: texture,
-        roughness: 0.5,
-        metalness: 0.1,
-        side: THREE.DoubleSide
-      });
-
-      const picMesh = new THREE.Mesh(planeGeom, mat);
-
-      const minY = finalHeight / 2 + 0.1;
-      const maxY = CONFIG.WALL_HEIGHT - finalHeight / 2 - 0.1;
-      const y = minY + Math.random() * (maxY - minY);
-
-      const isFront = Math.random() < 0.5;
-      const isHoriz = wall.type === 'horizontal' || wall.type === 'boundary-horizontal';
-      const thickness = isHoriz ? 0.400 : 0.402;
-      const offsetDist = thickness / 2 + 0.005;
-
-      let px = wall.x;
-      let pz = wall.z;
-      let rotY = 0;
-
-      if (isHoriz) {
-        pz += isFront ? offsetDist : -offsetDist;
-        rotY = isFront ? 0 : Math.PI;
-      } else {
-        px += isFront ? offsetDist : -offsetDist;
-        rotY = isFront ? Math.PI / 2 : -Math.PI / 2;
-      }
-
-      picMesh.position.set(px, y, pz);
-      picMesh.rotation.y = rotY;
-      picMesh.receiveShadow = true;
-      state.scene.add(picMesh);
-
-      state.activeWallPictures.push({
-        mesh: picMesh,
-        wall: wall,
-        audio: null,
-        canPlaySound: false,
-        hasPlayedSound: false
-      });
-    });
-
-    // Select exactly 20% of pictures to be able to play sounds
-    if (state.activeWallPictures.length > 0) {
-      const numPicsToPlaySound = Math.floor(state.activeWallPictures.length * 0.2);
-      const indices = Array.from({ length: state.activeWallPictures.length }, (_, idx) => idx);
-      // Shuffle indices
-      for (let i = indices.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [indices[i], indices[j]] = [indices[j], indices[i]];
-      }
-      for (let i = 0; i < indices.length; i++) {
-        state.activeWallPictures[indices[i]].canPlaySound = i < numPicsToPlaySound;
-      }
-    }
   }
 
-  // 6. Furnish rooms with carpets, windows, lamps, tables, chairs, sofas, shelves, TVs
-  furnishRooms();
+  selectedWalls.forEach((wall, index) => {
+    const texObj = state.wallPicTextures[index % state.wallPicTextures.length];
+    if (!texObj || !texObj.texture) return;
+    const texture = texObj.texture;
 
-  // Force first-frame light check
-  updateDynamicLights(true);
+    const img = texture.image;
+    const aspect = img ? (img.width / img.height) : 1.0;
+
+    const height = 0.6 + Math.random() * (CONFIG.WALL_HEIGHT - 0.2 - 0.6);
+    const width = height * aspect;
+
+    let finalWidth = width;
+    let finalHeight = height;
+    const maxWidth = wall.length * 0.95;
+    if (finalWidth > maxWidth) {
+      finalWidth = maxWidth;
+      finalHeight = finalWidth / aspect;
+    }
+
+    if (finalHeight > CONFIG.WALL_HEIGHT - 0.2) {
+      finalHeight = CONFIG.WALL_HEIGHT - 0.2;
+      finalWidth = finalHeight * aspect;
+    }
+
+    const planeGeom = new THREE.PlaneGeometry(finalWidth, finalHeight);
+
+    const mat = new THREE.MeshStandardMaterial({
+      map: texture,
+      roughness: 0.5,
+      metalness: 0.1,
+      side: THREE.DoubleSide
+    });
+
+    const picMesh = new THREE.Mesh(planeGeom, mat);
+
+    const minY = finalHeight / 2 + 0.1;
+    const maxY = CONFIG.WALL_HEIGHT - finalHeight / 2 - 0.1;
+    const y = minY + Math.random() * (maxY - minY);
+
+    const isFront = Math.random() < 0.5;
+    const isHoriz = wall.type === 'horizontal' || wall.type === 'boundary-horizontal';
+    const thickness = isHoriz ? 0.400 : 0.402;
+    const offsetDist = thickness / 2 + 0.005;
+
+    let px = wall.x;
+    let pz = wall.z;
+    let rotY = 0;
+
+    if (isHoriz) {
+      pz += isFront ? offsetDist : -offsetDist;
+      rotY = isFront ? 0 : Math.PI;
+    } else {
+      px += isFront ? offsetDist : -offsetDist;
+      rotY = isFront ? Math.PI / 2 : -Math.PI / 2;
+    }
+
+    picMesh.position.set(px, y, pz);
+    picMesh.rotation.y = rotY;
+    picMesh.receiveShadow = true;
+    state.scene.add(picMesh);
+
+    state.activeWallPictures.push({
+      mesh: picMesh,
+      wall: wall,
+      audio: null,
+      canPlaySound: false,
+      hasPlayedSound: false
+    });
+  });
+
+  // Select exactly 20% of pictures to be able to play sounds
+  if (state.activeWallPictures.length > 0) {
+    const numPicsToPlaySound = Math.floor(state.activeWallPictures.length * 0.2);
+    const indices = Array.from({ length: state.activeWallPictures.length }, (_, idx) => idx);
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+    for (let i = 0; i < indices.length; i++) {
+      state.activeWallPictures[indices[i]].canPlaySound = i < numPicsToPlaySound;
+    }
+  }
 }

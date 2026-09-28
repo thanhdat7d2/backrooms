@@ -8,7 +8,7 @@ export const CONFIG = {
   GRAVITY: 9.8, // Gravity for falling into the exit pit
   WALK_SPEED: 4.0, // walking speed in m/s
   RUN_SPEED: 7.5, // running speed (Shift) in m/s
-  LIGHT_POOL_SIZE: 6, // Max active PointLights in scene
+  LIGHT_POOL_SIZE: 4, // Max active shadow-casting PointLights in scene
 
   WALL_PIC_FILES: [
     'assets/images/wall/wall (1).jpg',
@@ -90,6 +90,12 @@ export const state = {
 
   furnitureModels: {},
   carpetTextures: null,
+  furnitureLoaded: false,
+  roomFurnitureGroups: [],
+  lastFurnitureCullPos: new THREE.Vector3(9999, 9999, 9999),
+  mazeBuildId: 0,
+  wallPicsBuiltForId: -1,
+  furnitureBuiltForId: -1,
 
   wallPicTextures: [],
   chasePicTextures: [],

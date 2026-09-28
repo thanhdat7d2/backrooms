@@ -69,7 +69,9 @@ function loadGLTFModel(key, def) {
         root.traverse((child) => {
           child.userData.isSharedModelAsset = true;
           if (child.isMesh) {
-            child.castShadow = true;
+            // Keep receiveShadow for realistic lighting, disable castShadow on high-poly furniture
+            // so PointLight cube shadow maps stay fast and stutter-free
+            child.castShadow = false;
             child.receiveShadow = true;
           }
         });
@@ -171,7 +173,7 @@ function getRotatedHalfExtents(size, rotY) {
   };
 }
 
-function tryPlaceFloorItem(key, x, y, z, rotY, roomBounds, occupiedBoxes, addCollider = true, pad = 0.22) {
+function tryPlaceFloorItem(key, x, y, z, rotY, roomBounds, occupiedBoxes, parentGroup, addCollider = true, pad = 0.22) {
   const item = cloneModel(key);
   if (!item) return null;
 
@@ -204,7 +206,7 @@ function tryPlaceFloorItem(key, x, y, z, rotY, roomBounds, occupiedBoxes, addCol
 
   item.mesh.position.set(x, y, z);
   item.mesh.rotation.y = rotY;
-  state.scene.add(item.mesh);
+  parentGroup.add(item.mesh);
 
   occupiedBoxes.push(box);
   if (addCollider) {
@@ -344,6 +346,8 @@ function getSolidWallSlots(room) {
 export function furnishRooms() {
   const maze = state.mazeData;
   if (!maze || !maze.rooms || maze.rooms.length === 0) return;
+  if (state.furnitureBuiltForId === state.mazeBuildId) return;
+  state.furnitureBuiltForId = state.mazeBuildId;
 
   const hasModels = Object.keys(state.furnitureModels).length > 0;
 
@@ -352,6 +356,13 @@ export function furnishRooms() {
     addRoomCarpet(room);
 
     if (!hasModels) return;
+
+    const roomGroup = new THREE.Group();
+    state.scene.add(roomGroup);
+    const roomCX = (room.xMin + room.xMax) / 2;
+    const roomCZ = (room.zMin + room.zMax) / 2;
+    const roomRadius = Math.hypot(room.xMax - room.xMin, room.zMax - room.zMin) / 2;
+    state.roomFurnitureGroups.push({ group: roomGroup, cx: roomCX, cz: roomCZ, radius: roomRadius });
 
     // Safe interior bounds (inset from room walls)
     const wallInset = 0.26;
@@ -416,7 +427,7 @@ export function furnishRooms() {
 
       winItem.mesh.position.set(wx, wy, wz);
       winItem.mesh.rotation.y = slot.rotY;
-      state.scene.add(winItem.mesh);
+      roomGroup.add(winItem.mesh);
 
       // Subtle eerie liminal glow backing behind window panes
       const glowGeo = new THREE.PlaneGeometry(winItem.size.x * 0.85, winItem.size.y * 0.82);
@@ -431,7 +442,7 @@ export function furnishRooms() {
         slot.z + slot.nz * 0.015
       );
       glowMesh.rotation.y = slot.rotY;
-      state.scene.add(glowMesh);
+      roomGroup.add(glowMesh);
 
       placedWindows++;
     }
@@ -447,7 +458,7 @@ export function furnishRooms() {
       const depth = Math.min(shelfSize.x, shelfSize.z);
       const sx = slot.x + slot.nx * (depth / 2 + 0.08);
       const sz = slot.z + slot.nz * (depth / 2 + 0.08);
-      if (tryPlaceFloorItem(shelfKey, sx, 0, sz, slot.rotY, roomBounds, occupiedBoxes, true, 0.2)) {
+      if (tryPlaceFloorItem(shelfKey, sx, 0, sz, slot.rotY, roomBounds, occupiedBoxes, roomGroup, true, 0.2)) {
         placedShelves++;
       }
     }
@@ -466,18 +477,16 @@ export function furnishRooms() {
             slot.z + slot.nz * offset
           );
           decor.mesh.rotation.y = slot.rotY;
-          state.scene.add(decor.mesh);
+          roomGroup.add(decor.mesh);
         }
       }
     }
 
     // 5. Ceiling Lamp inside the room
-    const roomCX = (room.xMin + room.xMax) / 2;
-    const roomCZ = (room.zMin + room.zMax) / 2;
     const ceilLamp = cloneModel('ceiling_lamp');
     if (ceilLamp) {
-      ceilLamp.mesh.position.set(roomCX, CONFIG.WALL_HEIGHT * 3 - ceilLamp.size.y, roomCZ);
-      state.scene.add(ceilLamp.mesh);
+      ceilLamp.mesh.position.set(roomCX, CONFIG.WALL_HEIGHT - ceilLamp.size.y, roomCZ);
+      roomGroup.add(ceilLamp.mesh);
     }
 
     // 6. Living Room Cluster: Sofa + Coffee Table + TV on Table + Side Table with Desk Lamp + Armchair
@@ -498,7 +507,8 @@ export function furnishRooms() {
         roomCZ - fwdZ * 1.15,
         loungeRot,
         roomBounds,
-        occupiedBoxes
+        occupiedBoxes,
+        roomGroup
       ) || tryPlaceFloorItem(
         sofaKey,
         roomCX,
@@ -506,7 +516,8 @@ export function furnishRooms() {
         roomCZ,
         loungeRot,
         roomBounds,
-        occupiedBoxes
+        occupiedBoxes,
+        roomGroup
       );
     }
 
@@ -521,7 +532,8 @@ export function furnishRooms() {
       baseAnchorZ + fwdZ * 1.35,
       loungeRot,
       roomBounds,
-      occupiedBoxes
+      occupiedBoxes,
+      roomGroup
     );
 
     // TV Stand (Wooden Table) + TV on top facing the sofa
@@ -532,7 +544,8 @@ export function furnishRooms() {
       baseAnchorZ + fwdZ * 2.65,
       loungeRot + Math.PI,
       roomBounds,
-      occupiedBoxes
+      occupiedBoxes,
+      roomGroup
     );
 
     if (tvTable) {
@@ -544,7 +557,7 @@ export function furnishRooms() {
           const tz = (tvTable.box.zMin + tvTable.box.zMax) / 2;
           tvItem.mesh.position.set(tx, tvTable.box.yMax - 0.01, tz);
           tvItem.mesh.rotation.y = loungeRot + Math.PI;
-          state.scene.add(tvItem.mesh);
+          roomGroup.add(tvItem.mesh);
         }
       }
     }
@@ -557,7 +570,8 @@ export function furnishRooms() {
       baseAnchorZ + rightZ * 1.65,
       loungeRot,
       roomBounds,
-      occupiedBoxes
+      occupiedBoxes,
+      roomGroup
     ) || tryPlaceFloorItem(
       'side_table',
       baseAnchorX - rightX * 1.65,
@@ -565,7 +579,8 @@ export function furnishRooms() {
       baseAnchorZ - rightZ * 1.65,
       loungeRot,
       roomBounds,
-      occupiedBoxes
+      occupiedBoxes,
+      roomGroup
     );
 
     if (sideTable) {
@@ -575,7 +590,7 @@ export function furnishRooms() {
         const lz = (sideTable.box.zMin + sideTable.box.zMax) / 2;
         lampItem.mesh.position.set(lx, sideTable.box.yMax - 0.01, lz);
         lampItem.mesh.rotation.y = Math.random() * Math.PI * 2;
-        state.scene.add(lampItem.mesh);
+        roomGroup.add(lampItem.mesh);
       }
     }
 
@@ -595,7 +610,8 @@ export function furnishRooms() {
           baseAnchorZ + fwdZ * f + rightZ * r,
           rot,
           roomBounds,
-          occupiedBoxes
+          occupiedBoxes,
+          roomGroup
         );
       }
     });
@@ -606,19 +622,44 @@ export function furnishRooms() {
         const rx = roomBounds.xMin + 1.2 + Math.random() * Math.max(0.1, (roomBounds.xMax - roomBounds.xMin) - 2.4);
         const rz = roomBounds.zMin + 1.2 + Math.random() * Math.max(0.1, (roomBounds.zMax - roomBounds.zMin) - 2.4);
         const rot = Math.floor(Math.random() * 4) * (Math.PI / 2);
-        const extraTable = tryPlaceFloorItem('wooden_table', rx, 0, rz, rot, roomBounds, occupiedBoxes);
+        const extraTable = tryPlaceFloorItem('wooden_table', rx, 0, rz, rot, roomBounds, occupiedBoxes, roomGroup);
         if (extraTable) {
           const lamp = cloneModel('desk_lamp');
           if (lamp) {
             lamp.mesh.position.set(rx, extraTable.box.yMax - 0.01, rz);
             lamp.mesh.rotation.y = Math.random() * Math.PI * 2;
-            state.scene.add(lamp.mesh);
+            roomGroup.add(lamp.mesh);
           }
-          tryPlaceFloorItem('wooden_chair', rx + 0.95, 0, rz, -Math.PI / 2, roomBounds, occupiedBoxes);
-          tryPlaceFloorItem('wooden_chair', rx - 0.95, 0, rz, Math.PI / 2, roomBounds, occupiedBoxes);
+          tryPlaceFloorItem('wooden_chair', rx + 0.95, 0, rz, -Math.PI / 2, roomBounds, occupiedBoxes, roomGroup);
+          tryPlaceFloorItem('wooden_chair', rx - 0.95, 0, rz, Math.PI / 2, roomBounds, occupiedBoxes, roomGroup);
           break;
         }
       }
     }
   });
+
+  updateFurnitureVisibility(true);
+}
+
+// Hide distant room furniture groups beyond fog distance to keep FPS high
+export function updateFurnitureVisibility(force = false) {
+  if (!state.roomFurnitureGroups || state.roomFurnitureGroups.length === 0 || !state.controls) return;
+
+  const playerPos = state.controls.object.position;
+  if (!force && playerPos.distanceToSquared(state.lastFurnitureCullPos) < 2.25) {
+    return; // Only re-check when player moves > 1.5m
+  }
+  state.lastFurnitureCullPos.copy(playerPos);
+
+  const px = playerPos.x;
+  const pz = playerPos.z;
+  const maxViewDist = 26.0; // Beyond dark fog visibility
+
+  for (let i = 0; i < state.roomFurnitureGroups.length; i++) {
+    const entry = state.roomFurnitureGroups[i];
+    const dx = entry.cx - px;
+    const dz = entry.cz - pz;
+    const threshold = maxViewDist + entry.radius;
+    entry.group.visible = (dx * dx + dz * dz) <= (threshold * threshold);
+  }
 }

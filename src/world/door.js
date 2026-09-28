@@ -34,6 +34,10 @@ export function createEPromptSprite() {
   return sprite;
 }
 
+// Reusable scratch vectors to avoid per-frame allocations
+const _vFront = new THREE.Vector3();
+const _vBack = new THREE.Vector3();
+
 // Update doors animations and interaction prompts
 export function updateDoors(dt) {
   if (!state.doors || state.doors.length === 0) return;
@@ -41,77 +45,68 @@ export function updateDoors(dt) {
   const playerPos = state.controls.object.position;
   let nearestHandleDist = Infinity;
   let nearestDoor = null;
+  let nearestIsFront = true;
 
-  state.doors.forEach(door => {
-    // 1. Swing animation: interpolate current angle towards target angle
-    const speed = 6.0; // animation speed
-    door.angle = THREE.MathUtils.lerp(door.angle, door.targetAngle, speed * dt);
-    
-    // Set hingeGroup rotation based on hinge direction
-    if (door.hingeDir === 'left') {
-      door.hingeGroup.rotation.y = door.angle;
-      door.hingeGroup.rotation.x = 0;
-    } else if (door.hingeDir === 'right') {
-      door.hingeGroup.rotation.y = -door.angle;
-      door.hingeGroup.rotation.x = 0;
-    } else if (door.hingeDir === 'top') {
-      door.hingeGroup.rotation.y = 0;
-      door.hingeGroup.rotation.x = door.angle;
-    } else if (door.hingeDir === 'bottom') {
-      door.hingeGroup.rotation.y = 0;
-      door.hingeGroup.rotation.x = -door.angle;
-    }
+  for (let i = 0; i < state.doors.length; i++) {
+    const door = state.doors[i];
 
-    // 2. Proximity and Handle checks
-    // Calculate world positions of front and back handles using handleLocalPos relative to hingeGroup
-    const handleOffsetZ = (door.t_door !== undefined ? door.t_door : 0.08) / 2 + 0.005;
-    const frontHandleWorld = new THREE.Vector3()
-      .copy(door.handleLocalPos)
-      .add(new THREE.Vector3(0, 0, handleOffsetZ))
-      .applyMatrix4(door.hingeGroup.matrixWorld);
-    const backHandleWorld = new THREE.Vector3()
-      .copy(door.handleLocalPos)
-      .add(new THREE.Vector3(0, 0, -handleOffsetZ))
-      .applyMatrix4(door.hingeGroup.matrixWorld);
+    // 1. Swing animation: only update when not yet settled at targetAngle
+    if (Math.abs(door.angle - door.targetAngle) > 0.001) {
+      const speed = 6.0;
+      door.angle = THREE.MathUtils.lerp(door.angle, door.targetAngle, Math.min(1, speed * dt));
+      if (Math.abs(door.angle - door.targetAngle) <= 0.001) {
+        door.angle = door.targetAngle;
+      }
 
-    const distFront = playerPos.distanceTo(frontHandleWorld);
-    const distBack = playerPos.distanceTo(backHandleWorld);
-    const minDist = Math.min(distFront, distBack);
-
-    // Hide prompts by default
-    door.frontPrompt.visible = false;
-    door.backPrompt.visible = false;
-
-    if (minDist < 1.8) {
-      if (minDist < nearestHandleDist) {
-        nearestHandleDist = minDist;
-        nearestDoor = door;
+      if (door.hingeDir === 'left') {
+        door.hingeGroup.rotation.y = door.angle;
+        door.hingeGroup.rotation.x = 0;
+      } else if (door.hingeDir === 'right') {
+        door.hingeGroup.rotation.y = -door.angle;
+        door.hingeGroup.rotation.x = 0;
+      } else if (door.hingeDir === 'top') {
+        door.hingeGroup.rotation.y = 0;
+        door.hingeGroup.rotation.x = door.angle;
+      } else if (door.hingeDir === 'bottom') {
+        door.hingeGroup.rotation.y = 0;
+        door.hingeGroup.rotation.x = -door.angle;
       }
     }
-  });
+
+    // Hide prompts by default
+    if (door.frontPrompt.visible) door.frontPrompt.visible = false;
+    if (door.backPrompt.visible) door.backPrompt.visible = false;
+
+    // 2. Fast coarse distance cull before matrix math (skip doors > 4m away)
+    const dx = playerPos.x - door.mesh.position.x;
+    const dz = playerPos.z - door.mesh.position.z;
+    if (dx * dx + dz * dz > 16.0) continue;
+
+    // Calculate world positions of front and back handles
+    const handleOffsetZ = (door.t_door !== undefined ? door.t_door : 0.08) / 2 + 0.005;
+    _vFront.set(door.handleLocalPos.x, door.handleLocalPos.y, door.handleLocalPos.z + handleOffsetZ)
+      .applyMatrix4(door.hingeGroup.matrixWorld);
+    _vBack.set(door.handleLocalPos.x, door.handleLocalPos.y, door.handleLocalPos.z - handleOffsetZ)
+      .applyMatrix4(door.hingeGroup.matrixWorld);
+
+    const distFront = playerPos.distanceTo(_vFront);
+    const distBack = playerPos.distanceTo(_vBack);
+    const minDist = Math.min(distFront, distBack);
+
+    if (minDist < 1.5 && minDist < nearestHandleDist) {
+      nearestHandleDist = minDist;
+      nearestDoor = door;
+      nearestIsFront = distFront < distBack;
+    }
+  }
 
   // Show prompt for the nearest door handle within interaction range
-  if (nearestDoor && nearestHandleDist < 1.5) {
-    const handleOffsetZ = (nearestDoor.t_door !== undefined ? nearestDoor.t_door : 0.08) / 2 + 0.005;
-    const frontHandleWorld = new THREE.Vector3()
-      .copy(nearestDoor.handleLocalPos)
-      .add(new THREE.Vector3(0, 0, handleOffsetZ))
-      .applyMatrix4(nearestDoor.hingeGroup.matrixWorld);
-    const backHandleWorld = new THREE.Vector3()
-      .copy(nearestDoor.handleLocalPos)
-      .add(new THREE.Vector3(0, 0, -handleOffsetZ))
-      .applyMatrix4(nearestDoor.hingeGroup.matrixWorld);
-
-    const distFront = playerPos.distanceTo(frontHandleWorld);
-    const distBack = playerPos.distanceTo(backHandleWorld);
-
-    if (distFront < distBack) {
+  if (nearestDoor) {
+    if (nearestIsFront) {
       nearestDoor.frontPrompt.visible = true;
     } else {
       nearestDoor.backPrompt.visible = true;
     }
-
-    // Save active door for interaction key E
     state.activeInteractiveDoor = nearestDoor;
   } else {
     state.activeInteractiveDoor = null;
