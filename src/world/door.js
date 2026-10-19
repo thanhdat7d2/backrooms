@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { state, CONFIG } from '../state.js';
+import { state } from '../state.js';
 
 export function createEPromptSprite() {
   const canvas = document.createElement('canvas');
@@ -7,7 +7,6 @@ export function createEPromptSprite() {
   canvas.height = 64;
   const ctx = canvas.getContext('2d');
 
-  // Draw black circle with white border
   ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
   ctx.beginPath();
   ctx.arc(32, 32, 28, 0, Math.PI * 2);
@@ -16,7 +15,6 @@ export function createEPromptSprite() {
   ctx.lineWidth = 4;
   ctx.stroke();
 
-  // Draw white letter E
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 32px sans-serif';
   ctx.textAlign = 'center';
@@ -24,21 +22,19 @@ export function createEPromptSprite() {
   ctx.fillText('E', 32, 32);
 
   const texture = new THREE.CanvasTexture(canvas);
-  const material = new THREE.SpriteMaterial({ 
-    map: texture, 
+  const material = new THREE.SpriteMaterial({
+    map: texture,
     depthTest: true,
     sizeAttenuation: true
   });
   const sprite = new THREE.Sprite(material);
-  sprite.scale.set(0.18, 0.18, 1.0); // ~18cm size
+  sprite.scale.set(0.18, 0.18, 1.0);
   return sprite;
 }
 
-// Reusable scratch vectors to avoid per-frame allocations
 const _vFront = new THREE.Vector3();
 const _vBack = new THREE.Vector3();
 
-// Update doors animations and interaction prompts
 export function updateDoors(dt) {
   if (!state.doors || state.doors.length === 0) return;
 
@@ -50,7 +46,7 @@ export function updateDoors(dt) {
   for (let i = 0; i < state.doors.length; i++) {
     const door = state.doors[i];
 
-    // 1. Swing animation: only update when not yet settled at targetAngle
+    // 1. Swing animation
     if (Math.abs(door.angle - door.targetAngle) > 0.001) {
       const speed = 6.0;
       door.angle = THREE.MathUtils.lerp(door.angle, door.targetAngle, Math.min(1, speed * dt));
@@ -73,16 +69,16 @@ export function updateDoors(dt) {
       }
     }
 
-    // Hide prompts by default
     if (door.frontPrompt.visible) door.frontPrompt.visible = false;
     if (door.backPrompt.visible) door.backPrompt.visible = false;
 
-    // 2. Fast coarse distance cull before matrix math (skip doors > 4m away)
+    // 2. Fast 3D distance cull
+    const dy = Math.abs(playerPos.y - door.mesh.position.y);
+    if (dy > 2.2) continue;
     const dx = playerPos.x - door.mesh.position.x;
     const dz = playerPos.z - door.mesh.position.z;
     if (dx * dx + dz * dz > 16.0) continue;
 
-    // Calculate world positions of front and back handles
     const handleOffsetZ = (door.t_door !== undefined ? door.t_door : 0.08) / 2 + 0.005;
     _vFront.set(door.handleLocalPos.x, door.handleLocalPos.y, door.handleLocalPos.z + handleOffsetZ)
       .applyMatrix4(door.hingeGroup.matrixWorld);
@@ -93,67 +89,54 @@ export function updateDoors(dt) {
     const distBack = playerPos.distanceTo(_vBack);
     const minDist = Math.min(distFront, distBack);
 
-    if (minDist < 1.5 && minDist < nearestHandleDist) {
+    if (minDist < 1.75 && minDist < nearestHandleDist) {
       nearestHandleDist = minDist;
       nearestDoor = door;
       nearestIsFront = distFront < distBack;
     }
   }
 
-  // Show prompt for the nearest door handle within interaction range
   if (nearestDoor) {
-    if (nearestIsFront) {
-      nearestDoor.frontPrompt.visible = true;
-    } else {
-      nearestDoor.backPrompt.visible = true;
-    }
+    if (nearestIsFront) nearestDoor.frontPrompt.visible = true;
+    else nearestDoor.backPrompt.visible = true;
     state.activeInteractiveDoor = nearestDoor;
   } else {
     state.activeInteractiveDoor = null;
   }
 }
 
-// Handle key press E
 export function interactWithDoor() {
   if (!state.activeInteractiveDoor) return;
 
   const door = state.activeInteractiveDoor;
   door.isOpen = !door.isOpen;
+  door.targetAngle = door.isOpen ? (Math.PI / 1.8) : 0;
 
-  // Toggle target angle (swing open by 90 degrees/1.57 rad)
-  door.targetAngle = door.isOpen ? (Math.PI / 1.8) : 0; // Swing open inward/outward
-
-  // Play open/close sound using audio/open.mp3 and audio/close.mp3
   if (!state.soundMuted) {
     const soundPath = door.isOpen ? 'assets/audio/open.mp3' : 'assets/audio/close.mp3';
     const audio = new Audio(soundPath);
     audio.volume = 1.0;
-    audio.play().catch(err => {
-      console.warn("Door audio play failed:", err);
-    });
+    audio.play().catch(() => { });
   }
 
-  // Update physics collider
   updateDoorCollider(door);
 }
 
-// Update the door's physics collider in the grid lookup
 export function updateDoorCollider(door) {
   const isHoriz = door.wall.type === 'horizontal' || door.wall.type === 'boundary-horizontal';
-  
-  // Remove existing collider from all grid cells
-  const key = `${door.gridI},${door.gridJ}`;
+  const f = door.floor || 0;
+
+  const key = `${f},${door.gridI},${door.gridJ}`;
   if (state.gridColliders[key]) {
     state.gridColliders[key] = state.gridColliders[key].filter(c => c.doorId !== door.id);
   }
-  const adjKey = isHoriz ? `${door.gridI},${door.gridJ + 1}` : `${door.gridI + 1},${door.gridJ}`;
+  const adjKey = isHoriz ? `${f},${door.gridI},${door.gridJ + 1}` : `${f},${door.gridI + 1},${door.gridJ}`;
   if (state.gridColliders[adjKey]) {
     state.gridColliders[adjKey] = state.gridColliders[adjKey].filter(c => c.doorId !== door.id);
   }
 
-  // If door is closed OR it is a weird door (weird doors block player even when open)
-  if (!door.isOpen || door.isWeird) {
-    // Temporarily set rotation back to closed state to get the closed bounding box
+  // Closed doors, weird doors, or dead-end doors block passage
+  if (!door.isOpen || door.isWeird || door.isDeadEnd) {
     const tempX = door.hingeGroup.rotation.x;
     const tempY = door.hingeGroup.rotation.y;
     door.hingeGroup.rotation.x = 0;
@@ -162,7 +145,6 @@ export function updateDoorCollider(door) {
 
     const box3 = new THREE.Box3().setFromObject(door.doorMesh);
 
-    // Restore swing angles
     door.hingeGroup.rotation.x = tempX;
     door.hingeGroup.rotation.y = tempY;
     door.hingeGroup.updateMatrixWorld(true);
@@ -176,12 +158,9 @@ export function updateDoorCollider(door) {
       zMax: box3.max.z
     };
 
-    const colliderObj = { type: 'door', doorId: door.id, box: box };
-
-    // Register in grid cells
+    const colliderObj = { type: 'door', doorId: door.id, box };
     if (!state.gridColliders[key]) state.gridColliders[key] = [];
     state.gridColliders[key].push(colliderObj);
-
     if (!state.gridColliders[adjKey]) state.gridColliders[adjKey] = [];
     state.gridColliders[adjKey].push(colliderObj);
   }
