@@ -4,7 +4,8 @@ import { state, CONFIG, DOM } from './state.js';
 import { loadTex, loadSingleTex, initSkinSelector } from './systems/texture.js';
 import { loadAudioBuffer, initAudioUI } from './systems/audio.js';
 import { processMovement, updateHealthHUD } from './systems/physics.js';
-import { updateDynamicLights } from './world/lights.js';
+import { updateDynamicLights, initFlashlight } from './world/lights.js';
+import { updateBiomeAtmosphere } from './systems/biomes.js';
 import { updateWallPicturesSpooky, updateChaseMonster, triggerExitFlash, updateSpookyAudio } from './systems/spooky.js';
 import { updateNavigationLine } from './systems/navigation.js';
 import { setupControls, updateDistanceHUD } from './systems/controls.js';
@@ -33,7 +34,7 @@ function initEngine() {
   state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25)); // Cap pixel ratio for smooth FPS
   state.renderer.setSize(window.innerWidth, window.innerHeight);
   state.renderer.shadowMap.enabled = true;
-  state.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  state.renderer.shadowMap.type = THREE.PCFShadowMap;
   state.renderer.outputColorSpace = THREE.SRGBColorSpace;
   state.renderer.toneMapping = THREE.ACESFilmicToneMapping;
 
@@ -42,7 +43,8 @@ function initEngine() {
     container.appendChild(state.renderer.domElement);
   }
 
-  state.clock = new THREE.Clock();
+  state.clock = new THREE.Timer();
+  state.clock.connect(document);
 
   // PointerLockControls setup controls the container
   state.controls = new PointerLockControls(state.cameraContainer, document.body);
@@ -52,8 +54,11 @@ function initEngine() {
   setupControls(restartLevel, descendToNextLevel);
 
   // Ambient light to ensure soft general visibility in dark corridors
-  const ambientLight = new THREE.AmbientLight(0x6b6352, 0.70);
-  state.scene.add(ambientLight);
+  state.ambientLight = new THREE.AmbientLight(0x6b6352, 0.65);
+  state.scene.add(state.ambientLight);
+
+  // Player toggleable flashlight (SpotLight attached to camera, press F)
+  initFlashlight();
 
   // Resize window handler
   window.addEventListener('resize', onWindowResize);
@@ -114,14 +119,18 @@ function animate() {
 
   if (!state.clock || !state.renderer || !state.scene || !state.camera) return;
 
+  state.clock.update();
   const dt = Math.min(state.clock.getDelta(), 0.1); // cap dt to prevent huge skips
 
   if (state.controls && state.controls.isLocked) {
     // Process physics, sliding movement, and gravity
     processMovement(dt, triggerExitFlash, showVictoryScreen);
 
-    // Dynamically manage PointLights
-    updateDynamicLights();
+    // Dynamically manage walkable-path PointLights & flickering
+    updateDynamicLights(dt);
+
+    // Smoothly transition fog, ambient lighting & water shimmer across mixed biomes
+    updateBiomeAtmosphere(dt);
 
     // Cull distant room furniture beyond fog range
     updateFurnitureVisibility();

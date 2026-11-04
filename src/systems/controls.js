@@ -2,14 +2,20 @@ import { state, CONFIG, DOM } from '../state.js';
 import { updateBackgroundAudioVolume, initAudio, initFootsteps } from './audio.js';
 import { toggleNavigationLine } from './navigation.js';
 import { interactWithDoor } from '../world/door.js';
+import { toggleFlashlight } from '../world/lights.js';
 
 export function updateDistanceHUD() {
-  if (!state.controls) return;
+  if (!state.controls || !state.mazeData) return;
   const currentPos = state.controls.object.position;
-  const diagDist = Math.sqrt(currentPos.x * currentPos.x + currentPos.z * currentPos.z);
+  const ex = state.mazeData.exit;
+  const dist3D = Math.hypot(
+    currentPos.x - ex.x,
+    (currentPos.y - CONFIG.EYE_HEIGHT) - ex.baseY,
+    currentPos.z - ex.z
+  );
   const val = DOM.pingDistanceValue;
   if (val) {
-    val.textContent = diagDist.toFixed(1);
+    val.textContent = `${dist3D.toFixed(1)} (F${ex.floor + 1})`;
   }
 }
 
@@ -35,26 +41,31 @@ export function onKeyDown(event) {
     case 'ShiftRight':
       state.isRunning = true;
       break;
-    case 'Tab':
-      event.preventDefault(); // Prevent default focus switching
-      updateDistanceHUD();
-      const distPing = DOM.distancePing;
-      if (distPing) {
-        distPing.classList.add('active');
+    case 'KeyC':
+      if (!event.repeat && state.controls && state.controls.isLocked) {
+        state.isCrouching = !state.isCrouching;
       }
+      break;
+    case 'KeyF':
+      if (!event.repeat && state.controls && state.controls.isLocked) {
+        toggleFlashlight();
+      }
+      break;
+    case 'Tab':
+      event.preventDefault();
+      updateDistanceHUD();
+      if (DOM.distancePing) DOM.distancePing.classList.add('active');
       break;
     case 'KeyN':
     case 'ControlLeft':
     case 'ControlRight':
       event.preventDefault();
-      console.log('Toggling navigation line. Current state:', state.showNavLine);
       toggleNavigationLine();
-      console.log('New navigation line state:', state.showNavLine);
       break;
     case 'Space':
-      if (state.isOnGround && !state.isFallingIntoExit) {
-        state.playerVelocityY = 4.0; // jump impulse velocity
-        state.isOnGround = false;
+      if (!state.isFallingIntoExit && !state.isFallingIntoAbyss) {
+        state.jumpBufferTimer = 0.14;
+        if (state.isCrouching) state.isCrouching = false;
       }
       break;
     case 'KeyE':
@@ -89,10 +100,7 @@ export function onKeyUp(event) {
       break;
     case 'Tab':
       event.preventDefault();
-      const distPing = DOM.distancePing;
-      if (distPing) {
-        distPing.classList.remove('active');
-      }
+      if (DOM.distancePing) DOM.distancePing.classList.remove('active');
       break;
   }
 }
@@ -101,9 +109,6 @@ export function setupControls(restartLevel, descendToNextLevel) {
   const controls = state.controls;
   if (!controls) return;
 
-  // Discard anomalous mouse movement spikes to prevent sudden 360-degree camera jumps.
-  // This is a known browser bug (mainly in Chromium) where movementX/Y reports huge spikes
-  // on locking/unlocking or under high mouse polling rates.
   document.addEventListener('mousemove', (e) => {
     if (state.controls && state.controls.isLocked) {
       const movementX = e.movementX || e.mozMovementX || e.webkitMovementX || 0;
@@ -122,7 +127,6 @@ export function setupControls(restartLevel, descendToNextLevel) {
   });
 
   controls.addEventListener('unlock', () => {
-    // Show pause screen only if we're not currently transitioning to the next level (falling into exit)
     if (!state.isFallingIntoExit) {
       if (DOM.pauseScreen) DOM.pauseScreen.classList.remove('hidden');
       if (state.camera) {
@@ -133,11 +137,9 @@ export function setupControls(restartLevel, descendToNextLevel) {
     updateBackgroundAudioVolume(false);
   });
 
-  // Keyboard Listeners
   document.addEventListener('keydown', onKeyDown);
   document.addEventListener('keyup', onKeyUp);
 
-  // UI buttons Click Listeners
   if (DOM.startBtn) {
     DOM.startBtn.addEventListener('click', () => {
       initAudio();
@@ -145,8 +147,7 @@ export function setupControls(restartLevel, descendToNextLevel) {
       if (state.audioListener && state.audioListener.context && state.audioListener.context.state === 'suspended') {
         state.audioListener.context.resume();
       }
-      // Reset chase spawn timer so they don't get chased immediately if they stayed in lobby
-      state.nextChaseSpawnTime = Date.now() + 25000 + Math.random() * 50000;
+      state.nextChaseSpawnTime = Date.now() + 22000 + Math.random() * 38000;
       controls.lock();
     });
   }
