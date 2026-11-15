@@ -1,8 +1,10 @@
-# Backrooms 3D
+# Backrooms
 
 A first-person 3D procedural maze and liminal-horror web game built with **Three.js (WebGL)** and vanilla **ES Modules** — zero build step required.
 
 Navigate procedurally generated non-uniform mazes, explore furnished liminal rooms, interact with doors, evade a pathfinding chase entity, and locate the glowing exit pit to descend to deeper, larger levels.
+
+![entity](./assets/images/demo/entity.png)
 
 ---
 
